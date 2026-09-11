@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: hiver
+    env: python
+    buildCommand: "cd frontend && npm install && npm run build && cd ../backend && pip install -r requirements.txt"
+    startCommand: "gunicorn -b 0.0.0.0:$PORT backend.app:app"
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
