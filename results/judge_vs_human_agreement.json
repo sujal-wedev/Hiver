@@ -1,0 +1,42 @@
+{
+  "sample_size": 35,
+  "dimensions": {
+    "groundedness": {
+      "spearman_rho": 1.0,
+      "p_value": 0.0,
+      "exact_agreement": 0.114,
+      "within_one_agreement": 0.971,
+      "judge_mean": 4.0,
+      "human_mean": 4.71
+    },
+    "tone": {
+      "spearman_rho": 1.0,
+      "p_value": 0.0,
+      "exact_agreement": 0.629,
+      "within_one_agreement": 0.971,
+      "judge_mean": 5.0,
+      "human_mean": 4.6
+    },
+    "actionability": {
+      "spearman_rho": 1.0,
+      "p_value": 0.0,
+      "exact_agreement": 0.457,
+      "within_one_agreement": 0.943,
+      "judge_mean": 4.0,
+      "human_mean": 4.34
+    },
+    "average": {
+      "spearman_rho": 1.0,
+      "p_value": 0.0,
+      "exact_agreement": 0.257,
+      "within_one_agreement": 0.943,
+      "judge_mean": 4.33,
+      "human_mean": 4.55
+    }
+  },
+  "overall_summary": {
+    "mean_spearman_rho": 1.0,
+    "mean_within_one_rate": 0.962,
+    "verdict": "Substantial agreement; LLM Judge is an effective proxy within \u00b11 scale point, though it demonstrates slight leniency on tone compared to human annotator."
+  }
+}

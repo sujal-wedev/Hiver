@@ -1,0 +1,18 @@
+tweet_id,text,primary_intent,ideal_action
+1004,"Ordered next day prime delivery for medicine and it is already 2 days late. Terrible service.",order_status_delivery,auto_handle
+1007,"Package marked as delivered in mailbox, but the parcel is too big to fit in any mailbox!",order_status_delivery,escalate
+1016,"Ordered 3 items together, 2 arrived but the 3rd is missing from the box even though invoice says complete.",order_status_delivery,escalate
+1028,"I was promised a refund of $84.50 within 48 hours by chat rep, but it has been 5 days and nothing.",refund_return,escalate
+1033,"Return status says 'refund issued to gift card balance', but I requested it back to my original credit card.",refund_return,escalate
+1047,"You guys double charged me for order #114-8392019-4829104! Two charges of $49.99 on my account.",billing_dispute,escalate
+1052,"If you don't reverse this fraudulent $320 charge immediately I will contact my bank and file a chargeback!",billing_dispute,escalate
+1067,"I am not receiving the 6-digit OTP verification code on my mobile phone to log in.",account_access,auto_handle
+1075,"Someone tried to log into my Amazon account from Russia, please secure my profile.",account_access,escalate
+1082,"I ordered size 10 running shoes and you sent size 7.",product_issue,auto_handle
+1091,"My package arrived with the seal broken and the iPhone box was empty inside.",product_issue,escalate
+1103,"Unable to remove an out of stock item from my shopping cart. Keeps throwing error 500.",app_website_bug,auto_handle
+1119,"I placed an order 5 minutes ago by mistake and want to cancel it before it ships.",cancellation,auto_handle
+1121,"I clicked cancel order #113-4920194, but seller marked it shipped 10 minutes later anyway!",cancellation,escalate
+1137,"Jeff Bezos is flying to space while his warehouse workers can't even get a package to my house on time.",general_complaint_vent,auto_handle
+1143,"I have contacted support 6 times about this and nobody has solved it. I am taking this to the BBB and my lawyer!",general_complaint_vent,escalate
+1155,"Où est ma commande Amazon France?",other_unclear,auto_handle

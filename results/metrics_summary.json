@@ -1,0 +1,44 @@
+{
+  "trivial_baseline": {
+    "intent_accuracy": 0.1529,
+    "intent_macro_f1": 0.0295,
+    "escalate_precision": 0.3118,
+    "escalate_recall": 1.0,
+    "escalate_f1": 0.4753,
+    "escalation_accuracy": 0.3118,
+    "false_negative_count": 0,
+    "false_positive_count": 117,
+    "judge_groundedness_mean": 4.0,
+    "judge_tone_mean": 5.0,
+    "judge_actionability_mean": 4.0,
+    "judge_overall_mean": 4.33
+  },
+  "simple_baseline": {
+    "intent_accuracy": 0.5529,
+    "intent_macro_f1": 0.5423,
+    "escalate_precision": 0.8,
+    "escalate_recall": 0.3019,
+    "escalate_f1": 0.4384,
+    "escalation_accuracy": 0.7588,
+    "false_negative_count": 37,
+    "false_positive_count": 4,
+    "judge_groundedness_mean": 4.0,
+    "judge_tone_mean": 5.0,
+    "judge_actionability_mean": 4.0,
+    "judge_overall_mean": 4.33
+  },
+  "full_system": {
+    "intent_accuracy": 0.5294,
+    "intent_macro_f1": 0.5003,
+    "escalate_precision": 0.6154,
+    "escalate_recall": 0.6038,
+    "escalate_f1": 0.6095,
+    "escalation_accuracy": 0.7588,
+    "false_negative_count": 21,
+    "false_positive_count": 20,
+    "judge_groundedness_mean": 4.0,
+    "judge_tone_mean": 5.0,
+    "judge_actionability_mean": 4.0,
+    "judge_overall_mean": 4.33
+  }
+}

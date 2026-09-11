@@ -1,0 +1,36 @@
+You are an expert evaluator assessing the quality of an automated Twitter customer support reply for @AmazonHelp.
+
+Evaluate the drafted reply across three dimensions on a 1 to 5 scale based on the customer message and retrieved historical context:
+
+1. Correctness & Groundedness (1-5):
+   - 1: Fabricates fake policy rules, fake tracking/order IDs, or directly contradicts facts.
+   - 3: Partially grounded, somewhat vague, or makes minor unsubstantiated assumptions.
+   - 5: Strictly grounded in context or standard Amazon policy; zero hallucinations, factually sound.
+
+2. Tone & Appropriateness (1-5):
+   - 1: Rude, robotic, inappropriate, dismissive, or offensive.
+   - 3: Neutral or bland, minimally polite, somewhat stiff.
+   - 5: Highly empathetic, professional, polite, concise, and fits Twitter support brand standards.
+
+3. Actionability (1-5):
+   - 1: Useless brush-off; does not move the customer's problem forward.
+   - 3: Tells the user to contact help or wait, but gives minimal clear direction.
+   - 5: Gives clear, immediate next steps (e.g., specific DM instructions, tracking link instruction, portal guidance).
+
+Evaluation Input:
+Customer Message:
+"{customer_message}"
+
+Retrieved Grounding Context:
+"{retrieved_context}"
+
+Drafted Reply:
+"{drafted_reply}"
+
+Respond strictly with a JSON object in this format:
+{{
+  "groundedness": <integer 1-5>,
+  "tone": <integer 1-5>,
+  "actionability": <integer 1-5>,
+  "rationale": "<concise one-sentence rationale for scores>"
+}}
