@@ -10,7 +10,6 @@ import logging
 from typing import List, Dict, Optional, Any
 import numpy as np
 import pandas as pd
-from sentence_transformers import SentenceTransformer
 
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 PROJECT_ROOT = os.path.abspath(os.path.join(BACKEND_DIR, ".."))
@@ -55,6 +54,7 @@ class HistoricalRetrievalIndex:
             return
 
         try:
+            from sentence_transformers import SentenceTransformer
             self.df = pd.read_parquet(self.threads_path).reset_index(drop=True)
             self.model = SentenceTransformer(self.model_name)
 
