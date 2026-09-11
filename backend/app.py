@@ -30,7 +30,11 @@ from src.pipeline import SupportAgentPipeline
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+FRONTEND_DIST = os.path.abspath(os.path.join(PROJECT_ROOT, "frontend", "dist"))
+if os.path.exists(FRONTEND_DIST):
+    app = Flask(__name__, static_folder=FRONTEND_DIST, static_url_path="")
+else:
+    app = Flask(__name__)
 
 if has_cors:
     CORS(app)
@@ -41,6 +45,22 @@ else:
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
         response.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
         return response
+
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_frontend(path):
+    if path.startswith("api/"):
+        return jsonify({"error": "Not Found"}), 404
+    if app.static_folder and os.path.exists(os.path.join(app.static_folder, path)) and path != "":
+        return app.send_static_file(path)
+    if app.static_folder and os.path.exists(os.path.join(app.static_folder, "index.html")):
+        return app.send_static_file("index.html")
+    return jsonify({
+        "status": "healthy",
+        "service": "AmazonHelp AI Support Agent Backend",
+        "version": "1.0.0"
+    })
+
 
 # Lazy initialization of Support Agent Pipeline
 pipeline_instance = None
