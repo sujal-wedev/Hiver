@@ -1,15 +1,21 @@
 """
-Milestone 4: End-to-End Support Agent Pipeline.
+Milestone 4: End-to-End Support Agent Pipeline for AmazonHelp.
 Unified entry point:
 handle_message(text) -> {intent, confidence, reply, decision, reason, retrieved_context}
 """
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import argparse
 import logging
 from typing import Dict, Any, Optional
+
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(BACKEND_DIR, ".."))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from src.classify_intent import LLMIntentClassifier
 from src.retrieval import HistoricalRetrievalIndex
@@ -110,7 +116,6 @@ def main():
             except (KeyboardInterrupt, EOFError):
                 break
     else:
-        # Run a quick test case
         sample = "Where is my package? The tracking has been stuck on carrier facility for 3 days!"
         res = agent.handle_message(sample)
         print(f"Sample test: {sample}\nOutput: {res}")

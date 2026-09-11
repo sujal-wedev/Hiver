@@ -11,6 +11,10 @@ dist/
 build/
 .eggs/
 
+# Node
+node_modules/
+**/node_modules/
+
 # Environment
 .env
 .venv/

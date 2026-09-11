@@ -1,11 +1,12 @@
 """
 Multi-provider LLM client for intent classification, reply drafting, and LLM-as-a-judge.
 Supports:
-1. OpenAI (gpt-4o-mini, gpt-3.5-turbo, etc.)
-2. OpenRouter (any model via OpenAI-compatible API)
-3. Gemini (gemini-1.5-flash / gemini-2.5-flash) via direct REST API
-4. Anthropic (claude-3-haiku)
-5. Offline / Mock fallback for deterministic local test runs without API keys.
+1. Groq (llama-3.1-8b-instant / llama3-70b-8192)
+2. OpenAI (gpt-4o-mini, gpt-3.5-turbo, etc.)
+3. OpenRouter (any model via OpenAI-compatible API)
+4. Gemini (gemini-1.5-flash / gemini-2.5-flash) via direct REST API
+5. Anthropic (claude-3-haiku)
+6. Offline / Mock fallback for deterministic local test runs without API keys.
 """
 
 import os
@@ -15,7 +16,17 @@ import logging
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 
-load_dotenv()
+# Resolve paths relative to this file so .env is always found
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_BACKEND_DIR = os.path.abspath(os.path.join(_THIS_DIR, ".."))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_BACKEND_DIR, ".."))
+
+# Load .env from project root (where the user's keys live)
+_env_path = os.path.join(_PROJECT_ROOT, ".env")
+if os.path.exists(_env_path):
+    load_dotenv(_env_path, override=True)
+else:
+    load_dotenv()  # fallback to default search
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +35,10 @@ class LLMClient:
         self.provider = provider or os.getenv("LLM_PROVIDER")
         self.model = model or os.getenv("LLM_MODEL")
 
-        # Auto-detect available provider if not explicitly given
         if not self.provider:
             if os.getenv("GROQ_API_KEY"):
                 self.provider = "groq"
-                self.model = self.model or "qwen/qwen3.8-27b"
+                self.model = self.model or "groq/compound-mini"
             elif os.getenv("OPENROUTER_API_KEY"):
                 self.provider = "openrouter"
                 self.model = self.model or "google/gemini-3.5-flash"
@@ -47,31 +57,34 @@ class LLMClient:
 
         logger.info(f"Initialized LLMClient with provider='{self.provider}', model='{self.model}'")
 
+    @staticmethod
+    def _strip_thinking(text: str) -> str:
+        """Remove <think>...</think> blocks emitted by reasoning models (e.g. Qwen)."""
+        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        return cleaned if cleaned else text
+
     def generate(self, prompt: str, temperature: float = 0.0, max_tokens: int = 400) -> str:
-        """Generates text from the configured LLM provider."""
         if self.provider == "groq":
-            return self._call_groq(prompt, temperature, max_tokens)
+            raw = self._call_groq(prompt, temperature, max_tokens)
         elif self.provider == "openai":
-            return self._call_openai(prompt, temperature, max_tokens)
+            raw = self._call_openai(prompt, temperature, max_tokens)
         elif self.provider == "openrouter":
-            return self._call_openrouter(prompt, temperature, max_tokens)
+            raw = self._call_openrouter(prompt, temperature, max_tokens)
         elif self.provider == "gemini":
-            return self._call_gemini(prompt, temperature, max_tokens)
+            raw = self._call_gemini(prompt, temperature, max_tokens)
         elif self.provider == "anthropic":
-            return self._call_anthropic(prompt, temperature, max_tokens)
+            raw = self._call_anthropic(prompt, temperature, max_tokens)
         else:
-            return self._call_mock(prompt)
+            raw = self._call_mock(prompt)
+        return self._strip_thinking(raw) if raw else raw
 
     def generate_json(self, prompt: str, temperature: float = 0.0) -> Dict[str, Any]:
-        """Generates text and parses it strictly into a Python dictionary."""
         raw_text = self.generate(prompt, temperature=temperature)
-        # Attempt direct JSON parse
         try:
             return json.loads(raw_text)
         except Exception:
             pass
 
-        # Try regex search for markdown fenced JSON or brace block
         match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
         if match:
             try:
@@ -86,13 +99,10 @@ class LLMClient:
             except Exception:
                 pass
 
-        # Fallback return
         return {"raw_response": raw_text, "error": "json_parse_failed"}
 
     def _call_groq(self, prompt: str, temperature: float, max_tokens: int) -> str:
-        """Calls Groq API (OpenAI-compatible) with high performance and rate limits."""
         import time
-        time.sleep(1.2)  # Respect Groq 30 RPM rate limit window
         from openai import OpenAI
         client = OpenAI(
             api_key=os.getenv("GROQ_API_KEY"),
@@ -102,7 +112,7 @@ class LLMClient:
         for attempt in range(5):
             try:
                 response = client.chat.completions.create(
-                    model=self.model or "llama-3.3-70b-versatile",
+                    model=self.model or "groq/compound-mini",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=temperature,
                     max_tokens=effective_max_tokens,
@@ -112,7 +122,7 @@ class LLMClient:
                 err_str = str(e)
                 if ("429" in err_str or "rate" in err_str.lower()) and attempt < 4:
                     wait_time = (attempt + 1) * 2
-                    logger.info(f"Groq rate limit hit (attempt {attempt+1}/5): {err_str[:120]}. Waiting {wait_time}s...")
+                    logger.info(f"Groq rate limit hit: waiting {wait_time}s...")
                     time.sleep(wait_time)
                 else:
                     logger.warning(f"Groq call failed ({e}), falling back to mock.")
@@ -134,7 +144,6 @@ class LLMClient:
             return self._call_mock(prompt)
 
     def _call_openrouter(self, prompt: str, temperature: float, max_tokens: int) -> str:
-        """Calls OpenRouter API (OpenAI-compatible) with the user's API key and retries on rate limits."""
         import time
         from openai import OpenAI
         client = OpenAI(
@@ -155,7 +164,7 @@ class LLMClient:
                 err_str = str(e)
                 if ("429" in err_str or "402" in err_str or "budget" in err_str.lower()) and attempt < 4:
                     wait_time = (attempt + 1) * 3
-                    logger.info(f"OpenRouter limit hit (attempt {attempt+1}/5): {err_str[:120]}. Waiting {wait_time}s...")
+                    logger.info(f"OpenRouter limit hit: waiting {wait_time}s...")
                     time.sleep(wait_time)
                 else:
                     logger.warning(f"OpenRouter call failed ({e}), falling back to mock.")
@@ -179,7 +188,7 @@ class LLMClient:
                 data = resp.json()
                 return data["candidates"][0]["content"]["parts"][0]["text"].strip()
             else:
-                logger.warning(f"Gemini API returned status {resp.status_code}: {resp.text}")
+                logger.warning(f"Gemini API returned status {resp.status_code}")
                 return self._call_mock(prompt)
         except Exception as e:
             logger.warning(f"Gemini call exception ({e}), falling back to mock.")
@@ -206,17 +215,14 @@ class LLMClient:
                 data = resp.json()
                 return data["content"][0]["text"].strip()
             else:
-                logger.warning(f"Anthropic returned status {resp.status_code}: {resp.text}")
+                logger.warning(f"Anthropic status {resp.status_code}")
                 return self._call_mock(prompt)
         except Exception as e:
             logger.warning(f"Anthropic exception ({e}), falling back to mock.")
             return self._call_mock(prompt)
 
     def _call_mock(self, prompt: str) -> str:
-        """Intelligent offline mock engine for classification, reply drafting, and judging."""
-        # Detect task from prompt markers
         if "classify the customer's incoming message" in prompt or "intent_classify" in prompt:
-            # Extract customer message
             msg_match = re.search(r'Customer Message:\s*"(.*?)"', prompt, re.DOTALL)
             text = (msg_match.group(1) if msg_match else prompt).lower()
 
@@ -246,8 +252,6 @@ class LLMClient:
             })
 
         elif "official Amazon customer support representative" in prompt or "reply_draft" in prompt:
-            # Grounded reply generation
-            # Extract intent if present
             intent_match = re.search(r'Classified Intent:\s*"(.*?)"', prompt)
             intent = intent_match.group(1) if intent_match else "general"
 
@@ -256,16 +260,15 @@ class LLMClient:
                 "refund_return": "We'd like to help sort out your return or refund right away. Please send us a DM with your order details to assist. ^AH",
                 "billing_dispute": "We understand billing issues are concerning. Please DM us your email and order details so our billing specialists can verify the charges. ^AH",
                 "account_access": "We are here to help secure your account. Please visit amazon.com/help or DM us your email address so we can guide you through recovery. ^AH",
-                "product_issue": "We are so sorry your item arrived in that condition! Please send us a DM with your order details and photos if possible so we can send a replacement. ^AH",
+                "product_issue": "We are so sorry your item arrived in that condition! Please send us a DM with your order details so we can process a replacement. ^AH",
                 "app_website_bug": "Thanks for reporting this glitch! Please try clearing your app cache or web cookies, and DM us if the issue persists. ^AH",
-                "cancellation": "We can help you with your cancellation request. Please DM us your order ID or account email to check its dispatch status. ^AH",
+                "cancellation": "We can help you with your cancellation request. Please DM us your order ID or account email to verify status. ^AH",
                 "general_complaint_vent": "We're genuinely sorry to hear about your frustrating experience. Please DM us the details so we can look into what went wrong. ^AH",
                 "other_unclear": "Thanks for reaching out to Amazon Help. Please send us a direct message with more details so we can best assist you. ^AH",
             }
             return replies.get(intent, "Thanks for reaching out to Amazon Help! Please DM us with your details so we can assist. ^AH")
 
         elif "expert evaluator assessing the quality" in prompt or "judge_rubric" in prompt:
-            # Judge rubric scoring
             return json.dumps({
                 "groundedness": 4,
                 "tone": 5,

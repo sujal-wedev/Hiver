@@ -5,9 +5,17 @@ concise, brand-appropriate, grounded replies for AmazonHelp.
 """
 
 import os
+import sys
 import re
 import logging
 from typing import Dict, Any, List, Optional
+
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(BACKEND_DIR, ".."))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from src.llm_client import LLMClient
 
@@ -20,17 +28,22 @@ class ReplyDrafter:
         self.prompt_template = self._load_prompt_template()
 
     def _load_prompt_template(self) -> str:
-        if os.path.exists(self.prompt_template_path):
-            with open(self.prompt_template_path, "r", encoding="utf-8") as f:
-                return f.read()
-        else:
-            return (
-                "You are an official Amazon customer support representative on Twitter (@AmazonHelp).\n"
-                "Customer Message: \"{customer_message}\"\n"
-                "Intent: \"{intent}\"\n"
-                "Grounding Context: {retrieved_context}\n"
-                "Draft a professional grounded Twitter reply:"
-            )
+        candidates = [
+            self.prompt_template_path,
+            os.path.join(PROJECT_ROOT, self.prompt_template_path),
+            os.path.join(BACKEND_DIR, self.prompt_template_path),
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    return f.read()
+        return (
+            "You are an official Amazon customer support representative on Twitter (@AmazonHelp).\n"
+            "Customer Message: \"{customer_message}\"\n"
+            "Intent: \"{intent}\"\n"
+            "Grounding Context: {retrieved_context}\n"
+            "Draft a professional grounded Twitter reply:"
+        )
 
     def check_hallucinations(self, draft_reply: str, customer_msg: str, retrieved_context: str) -> Dict[str, Any]:
         """
@@ -42,21 +55,18 @@ class ReplyDrafter:
         known_text = f"{customer_msg} {retrieved_context}"
         flagged_hallucinations = []
 
-        # Check for order numbers
         reply_orders = set(re.findall(r"\b\d{3}-\d{7}-\d{7}\b", draft_reply))
         known_orders = set(re.findall(r"\b\d{3}-\d{7}-\d{7}\b", known_text))
         fabricated_orders = reply_orders - known_orders
         if fabricated_orders:
             flagged_hallucinations.append(f"Fabricated order ID(s): {', '.join(fabricated_orders)}")
 
-        # Check for fabricated tracking numbers
         reply_trackings = set(re.findall(r"\bTBA\d{9,13}\b", draft_reply))
         known_trackings = set(re.findall(r"\bTBA\d{9,13}\b", known_text))
         fabricated_trackings = reply_trackings - known_trackings
         if fabricated_trackings:
             flagged_hallucinations.append(f"Fabricated tracking ID(s): {', '.join(fabricated_trackings)}")
 
-        # Check for fabricated dollar figures
         reply_dollars = set(re.findall(r"\$\d+(?:\.\d{2})?", draft_reply))
         known_dollars = set(re.findall(r"\$\d+(?:\.\d{2})?", known_text))
         fabricated_dollars = reply_dollars - known_dollars
@@ -67,7 +77,6 @@ class ReplyDrafter:
         sanitized_reply = draft_reply
 
         if has_hallucination:
-            # Sanitize fabricated entities
             for order in fabricated_orders:
                 sanitized_reply = sanitized_reply.replace(order, "your order details")
             for trk in fabricated_trackings:
@@ -89,15 +98,12 @@ class ReplyDrafter:
         )
 
         raw_reply = self.llm.generate(prompt, temperature=0.1, max_tokens=140).strip()
-        # Clean enclosing quotes if any
         if raw_reply.startswith('"') and raw_reply.endswith('"'):
             raw_reply = raw_reply[1:-1].strip()
 
-        # Enforce Twitter signature if missing
         if not any(raw_reply.endswith(sig) for sig in ["^AH", "^Amazon", "^Help", "^Helper"]):
             raw_reply = f"{raw_reply} ^AH"
 
-        # Hallucination check
         guard_result = self.check_hallucinations(raw_reply, customer_msg, retrieved_context_str)
 
         return {

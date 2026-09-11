@@ -5,11 +5,19 @@ top-k historical (customer_msg, brand_reply) pairs for few-shot grounding.
 """
 
 import os
+import sys
 import logging
 from typing import List, Dict, Optional, Any
 import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
+
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(BACKEND_DIR, ".."))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +28,8 @@ class HistoricalRetrievalIndex:
         embeddings_cache: str = "data/processed/retrieval_embeddings.npy",
         model_name: str = "all-MiniLM-L6-v2"
     ):
-        self.threads_path = threads_path
-        self.embeddings_cache = embeddings_cache
+        self.threads_path = self._resolve_path(threads_path)
+        self.embeddings_cache = self._resolve_path(embeddings_cache)
         self.model_name = model_name
         self.model = None
         self.df = None
@@ -29,48 +37,65 @@ class HistoricalRetrievalIndex:
 
         self._initialize_index()
 
+    def _resolve_path(self, rel_path: str) -> str:
+        candidates = [
+            rel_path,
+            os.path.join(PROJECT_ROOT, rel_path),
+            os.path.join(BACKEND_DIR, rel_path)
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+        return os.path.join(PROJECT_ROOT, rel_path)
+
     def _initialize_index(self):
         """Loads data and precomputes or loads cached embeddings."""
         if not os.path.exists(self.threads_path):
             logger.warning(f"Threads file {self.threads_path} not found. Retrieval will operate in fallback mode.")
             return
 
-        self.df = pd.read_parquet(self.threads_path).reset_index(drop=True)
-        self.model = SentenceTransformer(self.model_name)
+        try:
+            self.df = pd.read_parquet(self.threads_path).reset_index(drop=True)
+            self.model = SentenceTransformer(self.model_name)
 
-        if os.path.exists(self.embeddings_cache):
-            logger.info(f"Loading cached retrieval embeddings from {self.embeddings_cache}...")
-            self.embeddings = np.load(self.embeddings_cache)
-        else:
-            logger.info(f"Computing embeddings for {len(self.df)} historical threads...")
-            msgs = self.df["customer_msg"].fillna("").tolist()
-            self.embeddings = self.model.encode(msgs, batch_size=64, show_progress_bar=False, normalize_embeddings=True)
-            os.makedirs(os.path.dirname(self.embeddings_cache), exist_ok=True)
-            np.save(self.embeddings_cache, self.embeddings)
-            logger.info("Embeddings cached successfully.")
+            if os.path.exists(self.embeddings_cache):
+                logger.info(f"Loading cached retrieval embeddings from {self.embeddings_cache}...")
+                self.embeddings = np.load(self.embeddings_cache)
+            else:
+                logger.info(f"Computing embeddings for {len(self.df)} historical threads...")
+                msgs = self.df["customer_msg"].fillna("").tolist()
+                self.embeddings = self.model.encode(msgs, batch_size=64, show_progress_bar=False, normalize_embeddings=True)
+                os.makedirs(os.path.dirname(self.embeddings_cache), exist_ok=True)
+                np.save(self.embeddings_cache, self.embeddings)
+                logger.info("Embeddings cached successfully.")
+        except Exception as e:
+            logger.warning(f"Failed to initialize sentence transformer embeddings ({e}). Operating in fallback mode.")
+            self.df = None
+            self.embeddings = None
 
     def retrieve(self, query: str, intent: Optional[str] = None, k: int = 3) -> List[Dict[str, Any]]:
-        """
-        Retrieves top-k historical (customer_msg, brand_reply) pairs by cosine similarity.
-        """
+        """Retrieves top-k historical (customer_msg, brand_reply) pairs by cosine similarity."""
         if self.embeddings is None or self.df is None or len(self.df) == 0:
             return self._default_fallback_examples(intent, k)
 
-        query_emb = self.model.encode([query], normalize_embeddings=True)[0]
-        # Cosine similarity is dot product when normalized
-        scores = np.dot(self.embeddings, query_emb)
-        top_indices = np.argsort(scores)[::-1][:k]
+        try:
+            query_emb = self.model.encode([query], normalize_embeddings=True)[0]
+            scores = np.dot(self.embeddings, query_emb)
+            top_indices = np.argsort(scores)[::-1][:k]
 
-        results = []
-        for idx in top_indices:
-            row = self.df.iloc[idx]
-            results.append({
-                "similarity": float(scores[idx]),
-                "customer_msg": row["customer_msg"],
-                "brand_reply": row["brand_reply"],
-                "thread_id": row.get("thread_id", "")
-            })
-        return results
+            results = []
+            for idx in top_indices:
+                row = self.df.iloc[idx]
+                results.append({
+                    "similarity": float(scores[idx]),
+                    "customer_msg": row["customer_msg"],
+                    "brand_reply": row["brand_reply"],
+                    "thread_id": row.get("thread_id", "")
+                })
+            return results
+        except Exception as e:
+            logger.warning(f"Error during vector retrieval ({e}). Returning fallback examples.")
+            return self._default_fallback_examples(intent, k)
 
     def format_for_prompt(self, retrieved_examples: List[Dict[str, Any]]) -> str:
         """Formats retrieved examples into a readable context block for prompt injection."""
@@ -87,7 +112,6 @@ class HistoricalRetrievalIndex:
         return "\n\n".join(formatted_blocks)
 
     def _default_fallback_examples(self, intent: Optional[str], k: int) -> List[Dict[str, Any]]:
-        """Provides verified AmazonHelp historical patterns when cold starting."""
         curated_defaults = [
             {
                 "similarity": 0.90,

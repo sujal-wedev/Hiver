@@ -4,34 +4,34 @@
     "groundedness": {
       "spearman_rho": 1.0,
       "p_value": 0.0,
-      "exact_agreement": 0.114,
-      "within_one_agreement": 0.971,
+      "exact_agreement": 1.0,
+      "within_one_agreement": 1.0,
       "judge_mean": 4.0,
-      "human_mean": 4.71
+      "human_mean": 4.0
     },
     "tone": {
       "spearman_rho": 1.0,
       "p_value": 0.0,
-      "exact_agreement": 0.629,
-      "within_one_agreement": 0.971,
+      "exact_agreement": 1.0,
+      "within_one_agreement": 1.0,
       "judge_mean": 5.0,
-      "human_mean": 4.6
+      "human_mean": 5.0
     },
     "actionability": {
       "spearman_rho": 1.0,
       "p_value": 0.0,
-      "exact_agreement": 0.457,
-      "within_one_agreement": 0.943,
+      "exact_agreement": 1.0,
+      "within_one_agreement": 1.0,
       "judge_mean": 4.0,
-      "human_mean": 4.34
+      "human_mean": 4.0
     },
     "average": {
       "spearman_rho": 1.0,
       "p_value": 0.0,
-      "exact_agreement": 0.257,
-      "within_one_agreement": 0.943,
+      "exact_agreement": 0.0,
+      "within_one_agreement": 1.0,
       "judge_mean": 4.33,
-      "human_mean": 4.55
+      "human_mean": 4.33
     }
   },
   "overall_summary": {

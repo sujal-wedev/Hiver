@@ -1,100 +1,138 @@
-# Autonomous Twitter Customer-Support Agent for AmazonHelp
+# Autonomous Twitter Support Agent for AmazonHelp (@AmazonHelp)
 
-An auditable, retrieval-grounded AI agent designed to triage, evaluate risk, and autonomously draft grounded responses to inbound customer inquiries directed at `@AmazonHelp` on Twitter. Built on top of the Kaggle Customer Support on Twitter dataset (`twcs.csv`), the system integrates an 8-class operational intent classifier, a cosine-similarity retrieval engine indexing 5,000 verified historical brand resolutions, a deterministic multi-signal escalation policy to prevent safety-critical under-triage, hallucination guards, and an automated LLM-as-a-judge evaluation suite calibrated against human ground truth.
+An auditable, retrieval-grounded AI agent designed to triage, evaluate risk, and autonomously draft grounded responses to inbound customer inquiries directed at `@AmazonHelp` on Twitter.
+
+Built with a **Flask Python Backend** (`backend/`) housing ML pipelines and evaluation engines, and a modern **Vite + React Frontend** (`frontend/`) interactive dashboard.
 
 ---
 
-## 1. Quickstart & Setup
+## 1. Project Architecture & Folder Structure
+
+```
+├── backend/
+│   ├── app.py                   # Flask REST API server (ports, CORS, endpoints)
+│   ├── requirements.txt         # Python dependencies
+│   ├── src/                     # Core ML & Agent Pipeline Modules
+│   │   ├── pipeline.py          # Unified SupportAgentPipeline controller
+│   │   ├── classify_intent.py   # LLM & Classical TF-IDF intent classifiers
+│   │   ├── retrieval.py         # Historical Retrieval Index (all-MiniLM-L6-v2)
+│   │   ├── draft_reply.py       # Grounded reply generator + hallucination checks
+│   │   ├── escalation_policy.py # Deterministic multi-signal escalation policy
+│   │   ├── llm_client.py        # Multi-provider LLM client (Groq / OpenAI / Gemini / Mock)
+│   │   ├── taxonomy.py          # Operational Intent Taxonomy
+│   │   ├── data_prep.py         # Dataset chunking & thread reconstruction
+│   │   ├── cluster_intents.py   # Unsupervised K-Means clustering
+│   │   ├── baselines.py         # Trivial & Simple baseline agents
+│   │   └── build_golden_set.py  # Golden evaluation dataset builder
+│   └── eval/                    # Evaluation Suite & Judge Calibration
+│       ├── run_eval.py          # Master evaluation runner over 170 golden items
+│       ├── llm_judge.py         # LLM-as-a-judge rubric evaluator
+│       ├── metrics.py           # Classification & escalation metric calculators
+│       └── judge_calibration.py # Judge vs Human annotator agreement analyzer
+│
+├── frontend/                    # Vite + React + JavaScript Interactive UI
+│   ├── package.json
+│   ├── vite.config.js           # Vite dev server + proxy to Flask API
+│   ├── index.html
+│   └── src/
+│       ├── App.jsx              # Main dashboard container & state controller
+│       ├── index.css            # Glassmorphism design system & styles
+│       └── components/
+│           ├── Header.jsx       # Header navigation bar & backend status indicator
+│           ├── SandboxTab.jsx   # Interactive live inference sandbox & 4-stage visualizer
+│           ├── MetricsTab.jsx   # Headline metrics table & baseline comparison
+│           ├── JudgeAgreementTab.jsx # LLM Judge vs Human calibration stats (Spearman ρ = 1.0)
+│           ├── FailureAnalysisTab.jsx # Deep-dive into Top 5 failure cases & hypotheses
+│           ├── DecisionLogTab.jsx    # 10 non-obvious engineering decisions
+│           └── GoldenSetTab.jsx      # Golden evaluation set taxonomy & methodology
+│
+├── data/                        # Datasets (raw & processed parquet threads)
+├── golden_set/                  # Hand-labeled golden evaluation CSVs
+├── results/                     # Output metrics JSON, plots, and failure case markdown
+├── prompts/                     # Prompt templates
+├── Makefile                     # Build & run automation
+├── report.md                    # Technical report
+└── decision_log.md              # Detailed decision log
+```
+
+---
+
+## 2. Quickstart & How to Run
 
 ### Prerequisites
-- Python 3.10+ (Tested on Python 3.13)
-- Git
+- **Python 3.10+** (Flask, Pandas, SentenceTransformers, Scikit-Learn)
+- **Node.js 18+** & **npm 9+** (Vite + React)
 
-### Installation
-Clone the repository and install dependencies:
+### 1. Install Backend Dependencies
 ```bash
-git clone <repo-url> support-agent
-cd support-agent
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
-### Environment Configuration (Optional)
-The agent features a multi-provider LLM client (`src/llm_client.py`) supporting OpenAI, Google Gemini, Anthropic Claude, and an intelligent offline mock engine.
-
-If using live LLM APIs, create a `.env` file in the root directory:
-```env
-# Optional API keys (system defaults to offline mode if none provided)
-OPENAI_API_KEY=your_openai_api_key
-# or
-GEMINI_API_KEY=your_gemini_api_key
-# or
-ANTHROPIC_API_KEY=your_anthropic_api_key
-```
-*Note: If no API keys are provided, the system executes deterministically using its offline inference engine.*
-
----
-
-## 2. End-to-End Reproduction in Under 15 Minutes
-
-The entire pipeline—from raw CSV chunked processing to clustering, retrieval indexing, and golden set evaluation—is designed to run end-to-end in **~3 to 5 minutes** wall-clock time.
-
-Run the complete pipeline with one command:
+### 2. Install Frontend Dependencies
 ```bash
-# Via Makefile:
-make all
-
-# Or directly via Python:
-python src/data_prep.py --csv-path data/raw/twcs.csv --output-dir data --sample-size 5000 --seed 42
-python src/cluster_intents.py --data-path data/processed/amazonhelp_customer_msgs.parquet --output-dir results --sample-size 1500 --seed 42 --chosen-k 8
-python -c "import sys; sys.path.insert(0, '.'); from src.retrieval import HistoricalRetrievalIndex; HistoricalRetrievalIndex()"
-python eval/run_eval.py
-```
-
-### Wall-Clock Time Breakdown:
-1. **Data Prep (`src/data_prep.py`)**: ~35 seconds (scans 2.8M rows in 100k chunks, extracts 76,525 AmazonHelp threads, samples 5,000).
-2. **Clustering Sweep (`src/cluster_intents.py`)**: ~45 seconds (embeds 1,500 messages, computes silhouette scores $k=6..14$).
-3. **Retrieval Indexing (`src/retrieval.py`)**: ~60 seconds (embeds and caches 5,000 threads to `retrieval_embeddings.npy`).
-4. **Full Evaluation Harness (`eval/run_eval.py`)**: ~30 seconds (runs Trivial, Simple, and Full models over 170 golden cases + 35 calibration cases).
-
----
-
-## 3. Interactive CLI & Demo
-
-Test the agent on any custom customer message:
-```bash
-python src/pipeline.py --message "Where is my package? The tracking has been stuck for 4 days!"
-```
-
-Launch an interactive terminal session:
-```bash
-python src/pipeline.py --interactive
+cd frontend
+npm install
+cd ..
 ```
 
 ---
 
-## 4. Deliverables Index
+## 3. Running the Application End-to-End
 
-| Deliverable | File Path | Description |
-|---|---|---|
-| **Technical Report** | [`report.md`](report.md) | ~6-page formal engineering report covering problem framing, baseline comparisons, failure analysis, headline caveats, and future roadmap. |
-| **Decision Log** | [`decision_log.md`](decision_log.md) | 13 structured decisions explaining key engineering trade-offs. |
-| **Intent Taxonomy** | [`src/taxonomy.py`](src/taxonomy.py) | Frozen 8-intent operational taxonomy and multi-intent priority hierarchy. |
-| **Labeling Protocol** | [`golden_set/labeling_notes.md`](golden_set/labeling_notes.md) | Sampling strategy, rubric, and blind test-retest self-consistency check ($\kappa=1.000$). |
-| **Golden Evaluation Set** | [`golden_set/golden_eval_v1.csv`](golden_set/golden_eval_v1.csv) | $N=170$ hand-labeled instances with primary intent, ideal action, and notes. |
-| **Evaluation Metrics** | [`results/metrics_summary.json`](results/metrics_summary.json) | Benchmark performance across Trivial, Simple, and Full System. |
-| **Judge Calibration** | [`results/judge_vs_human_agreement.json`](results/judge_vs_human_agreement.json) | LLM Judge vs. Human annotator agreement on 35 cases (96.2% within $\pm 1$). |
-| **Diagnostic Failures** | [`results/failure_cases.md`](results/failure_cases.md) | Detailed analysis of top 5 system error cases. |
-| **Clustering Discovery** | [`results/cluster_discovery_summary.md`](results/cluster_discovery_summary.md) | K-Means silhouette evaluation and empirical cluster descriptions. |
-| **Silhouette Curve** | [`results/silhouette_sweep.png`](results/silhouette_sweep.png) | Silhouette score plot across $k=6..14$. |
-| **Confusion Matrix** | [`results/confusion_matrix.png`](results/confusion_matrix.png) | Confusion matrix for the full system. |
-| **EDA Summary** | [`results/eda_summary.md`](results/eda_summary.md) | Message length distribution and top bigrams from raw Twitter data. |
+### Running the Flask Backend API Server
+```bash
+python backend/app.py
+```
+*Backend runs on `http://127.0.0.1:5000` exposing REST endpoints (`/api/process`, `/api/stats`, `/api/samples`, `/api/eval`, `/api/health`).*
+
+### Running the Vite React Frontend
+In a separate terminal window:
+```bash
+cd frontend
+npm run dev
+```
+*Frontend runs on `http://localhost:5173` with live hot-reloading and proxying to backend.*
 
 ---
 
-## 5. Attributions & References
+## 4. Pipeline Execution & Evaluation Commands
 
-- **Dataset**: Kaggle Customer Support on Twitter (`thoughtvector/customer-support-on-twitter`) under Open Data Commons Attribution License.
+### Test Single Message Pipeline in Terminal
+```bash
+python backend/src/pipeline.py --message "Where is my package? It has been stuck at the facility for 3 days!"
+```
+
+### Run Full Evaluation Harness
+```bash
+python backend/eval/run_eval.py
+```
+*Evaluates Trivial Baseline, Simple Baseline, and Full System across 170 golden dataset cases and outputs `results/metrics_summary.json` and `results/judge_vs_human_agreement.json`.*
+
+### Using Makefile Shortcuts
+- `make backend`: Launches Flask API server.
+- `make frontend`: Launches Vite React dev server.
+- `make eval`: Runs evaluation suite.
+- `make demo`: Executes test inference pipeline.
+
+---
+
+## 5. Summary of Headline Evaluation Results
+
+| Metric | Trivial Baseline | Simple Baseline | Full System (Our Agent) |
+|---|:---:|:---:|:---:|
+| **Intent Accuracy** | 15.29% | **55.29%** | 52.94% |
+| **Intent Macro F1** | 2.95% | **54.23%** | 50.03% |
+| **Escalation Precision** | 31.18% | **80.00%** | 61.54% |
+| **Escalation Recall** | 100.00% | 30.19% | **60.38%** |
+| **Escalation F1 Score** | 47.53% | 43.84% | **60.95%** (+17.1% gain) |
+| **False Negatives (Safety Risk)** | 0 | 37 (High Risk) | **21** (56% Reduction) |
+| **LLM Judge Quality** | 4.33 / 5 | 4.33 / 5 | **4.33 / 5** |
+| **Human vs LLM Judge Agreement** | - | - | **Spearman ρ = 1.0, 96.2% within ±1** |
+
+---
+
+## 6. Attributions & Data License
+
+- **Primary Dataset**: Kaggle Customer Support on Twitter (`thoughtvector/customer-support-on-twitter`) under Open Data Commons Attribution License.
 - **Embedding Model**: `sentence-transformers/all-MiniLM-L6-v2` (Apache 2.0 license) via Hugging Face.
-- **Machine Learning & Analytics**: `scikit-learn` (k-means, logistic regression, TF-IDF, classification metrics), `scipy` (Spearman rank correlation), `pandas`, `numpy`.
-- **Visualization**: `matplotlib` and `seaborn`.
-- **Prompts**: Grounded prompting and LLM-as-a-judge rubric adapted from Anthropic and OpenAI evaluation guidelines.
+- **Libraries**: Flask, Flask-CORS, Vite, React, Lucide-React, Pandas, Scikit-Learn, SentenceTransformers, OpenAI.

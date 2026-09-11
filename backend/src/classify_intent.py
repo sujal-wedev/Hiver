@@ -1,11 +1,12 @@
 """
-Milestone 4: Intent Classification Modules.
+Milestone 4: Intent Classification Modules for AmazonHelp AI Support Agent.
 Implements:
 1. LLMIntentClassifier: Zero/few-shot LLM classifier using prompts/intent_classify.txt
 2. ClassicalIntentClassifier: TF-IDF + Logistic Regression benchmark classifier
 """
 
 import os
+import sys
 import re
 import json
 import logging
@@ -13,6 +14,14 @@ from typing import Dict, Any, Optional
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+
+# Ensure backend package imports work
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(BACKEND_DIR, ".."))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from src.taxonomy import Intent, ALL_INTENTS, get_taxonomy_prompt_string
 from src.llm_client import LLMClient
@@ -26,16 +35,21 @@ class LLMIntentClassifier:
         self.prompt_template = self._load_prompt_template()
 
     def _load_prompt_template(self) -> str:
-        if os.path.exists(self.prompt_template_path):
-            with open(self.prompt_template_path, "r", encoding="utf-8") as f:
-                return f.read()
-        else:
-            return (
-                "You are a customer-support triage agent for AmazonHelp.\n"
-                "Classify the customer message into one of:\n{taxonomy_definitions}\n\n"
-                "Message: \"{customer_message}\"\n\n"
-                "Return JSON: {{\"intent\": \"...\", \"confidence\": 0.9, \"reasoning\": \"...\"}}"
-            )
+        candidates = [
+            self.prompt_template_path,
+            os.path.join(PROJECT_ROOT, self.prompt_template_path),
+            os.path.join(BACKEND_DIR, self.prompt_template_path),
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    return f.read()
+        return (
+            "You are a customer-support triage agent for AmazonHelp.\n"
+            "Classify the customer message into one of:\n{taxonomy_definitions}\n\n"
+            "Message: \"{customer_message}\"\n\n"
+            "Return JSON: {{\"intent\": \"...\", \"confidence\": 0.9, \"reasoning\": \"...\"}}"
+        )
 
     def classify(self, message: str) -> Dict[str, Any]:
         """Classifies a customer message using the LLM prompt template."""
@@ -48,9 +62,7 @@ class LLMIntentClassifier:
         result = self.llm.generate_json(prompt, temperature=0.0)
         predicted_intent = result.get("intent", "").strip().lower()
 
-        # Validate against official taxonomy
         if predicted_intent not in ALL_INTENTS:
-            # Check for partial or alias match
             matched = False
             for valid_intent in ALL_INTENTS:
                 if valid_intent in predicted_intent or predicted_intent in valid_intent:

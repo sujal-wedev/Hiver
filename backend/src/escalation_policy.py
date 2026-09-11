@@ -5,8 +5,18 @@ severe physical/safety damage, repeat contact, and low confidence) to produce an
 explainable auto_handle vs. escalate decision with a plain-text justification string.
 """
 
+import os
+import sys
 import re
 from typing import Dict, Any, List
+
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(BACKEND_DIR, ".."))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from src.taxonomy import Intent
 
 ESCALATE_PRONE_INTENTS = {
@@ -52,42 +62,34 @@ def evaluate_escalation_policy(
     text_lower = text.lower()
     fired_signals: List[str] = []
 
-    # Signal 1: High-risk intent category
     if intent in ESCALATE_PRONE_INTENTS:
         fired_signals.append(f"High-risk intent category ('{intent}')")
 
-    # Signal 2: Legal / Regulatory threat
     matched_legal = [k.replace(r"\b", "") for k in LEGAL_AND_REGULATORY_KEYWORDS if re.search(k, text_lower)]
     if matched_legal:
         fired_signals.append(f"Legal/Regulatory escalation keyword detected ({', '.join(matched_legal)})")
 
-    # Signal 3: Explicit monetary amounts
     dollar_matches = re.findall(r"\$\d+(?:\.\d{2})?", text)
     if dollar_matches:
         fired_signals.append(f"Monetary value involved ({', '.join(dollar_matches)})")
 
-    # Signal 4: Safety / Hazardous / Severe product defects
     matched_safety = [k.replace(r"\b", "") for k in SAFETY_AND_SEVERE_KEYWORDS if re.search(k, text_lower)]
     if matched_safety:
         fired_signals.append(f"Safety/Severe incident keyword detected ({', '.join(matched_safety)})")
 
-    # Signal 5: Repeat contact / unfulfilled agent commitment
     if thread_length > 1:
         fired_signals.append(f"Multi-turn repeat interaction (thread_length={thread_length})")
     matched_repeat = [p.replace(r"\b", "") for p in REPEAT_CONTACT_PATTERNS if re.search(p, text_lower)]
     if matched_repeat:
         fired_signals.append("Customer indicates prior unresolved contact attempts")
 
-    # Signal 6: Extreme customer agitation or supervisor demand
     matched_frustration = [k.replace(r"\b", "") for k in HIGH_FRUSTRATION_KEYWORDS if re.search(k, text_lower)]
     if matched_frustration:
         fired_signals.append(f"High-frustration / supervisor demand detected ({', '.join(matched_frustration)})")
 
-    # Signal 7: Low intent classification confidence
     if confidence < 0.60:
         fired_signals.append(f"Low intent classification confidence ({confidence:.2f} < 0.60)")
 
-    # Decision logic
     if fired_signals:
         decision = "escalate"
         reason = "Escalated due to: " + "; ".join(fired_signals)

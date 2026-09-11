@@ -1,28 +1,27 @@
-.PHONY: all install data-prep cluster retrieval eval demo test clean
+.PHONY: all install backend frontend dev eval demo clean
 
-# Default: complete end-to-end pipeline execution
-all: data-prep cluster retrieval eval
+# Default: complete end-to-end evaluation
+all: backend-eval
 
 install:
-	pip install -r requirements.txt
+	pip install -r backend/requirements.txt
+	cd frontend && npm install
 
-data-prep:
-	python src/data_prep.py --csv-path data/raw/twcs.csv --output-dir data --sample-size 5000 --seed 42
+backend:
+	python backend/app.py
 
-cluster:
-	python src/cluster_intents.py --data-path data/processed/amazonhelp_customer_msgs.parquet --output-dir results --sample-size 1500 --seed 42 --chosen-k 8
+frontend:
+	cd frontend && npm run dev
 
-retrieval:
-	python -c "import sys, os; sys.path.insert(0, '.'); from src.retrieval import HistoricalRetrievalIndex; idx = HistoricalRetrievalIndex(); print('Retrieval index ready:', len(idx.df))"
+dev:
+	@echo "Launching Flask backend and Vite React frontend..."
+	python backend/app.py
 
 eval:
-	python eval/run_eval.py
+	python backend/eval/run_eval.py
 
 demo:
-	python src/pipeline.py --message "Where is my package? It has been stuck at the transit hub for 4 days!"
-
-test: demo
-	python -c "import sys; sys.path.insert(0, '.'); from eval.metrics import evaluate_intent_classification; print('Metrics OK')"
+	python backend/src/pipeline.py --message "Where is my package? It has been stuck at the carrier facility for 3 days!"
 
 clean:
-	rm -rf __pycache__ src/__pycache__ eval/__pycache__
+	rm -rf __pycache__ backend/__pycache__ backend/src/__pycache__ backend/eval/__pycache__ frontend/dist
