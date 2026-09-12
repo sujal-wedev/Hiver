@@ -9,6 +9,7 @@
 [![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-Render-46E3B7?style=for-the-badge)](https://hiver-43h0.onrender.com/)
 
 <br/>
 
@@ -16,7 +17,7 @@
 
 <br/>
 
-[Live Demo](#-live-demo) · [Quick Start](#-quickstart) · [Architecture](#-system-architecture) · [Evaluation](#-evaluation-results) · [Report](report.md) · [Decision Log](decision_log.md)
+[🚀 Live Demo](https://hiver-43h0.onrender.com/) · [Quick Start](#-quickstart) · [Architecture](#-system-architecture) · [Evaluation](#-evaluation-results) · [Report](report.md) · [Decision Log](decision_log.md)
 
 ---
 
